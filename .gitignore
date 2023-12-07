@@ -361,3 +361,21 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/InfoHub_2.0/aad.manifest.json
+/InfoHub_2.0/App.razor
+/InfoHub_2.0/appsettings.Development.json
+/InfoHub_2.0/appsettings.json
+/InfoHub_2.0/Config.cs
+/InfoHub_2.0/GettingStarted.md
+/InfoHub_2.0/Program.cs
+/InfoHub_2.0/teamsapp.local.yml
+/InfoHub_2.0/teamsapp.yml
+/InfoHub_2.0/_Imports.razor
+/InfoHub_2.0/Interop/InteropModuleBase.cs
+/InfoHub_2.0/Interop/TeamsSDK/EnumDescriptionConverter.cs
+/InfoHub_2.0/Interop/TeamsSDK/MicrosoftTeams.cs
+/InfoHub_2.0/Interop/TeamsSDK/TeamsContext.cs
+/InfoHub_2.0/Interop/TeamsSDK/TeamsInstanceSettings.cs
+/InfoHub_2.0/infra/azure.bicep
+/InfoHub_2.0/infra/azure.parameters.json
+/InfoHub_2.0/env/.env.dev
