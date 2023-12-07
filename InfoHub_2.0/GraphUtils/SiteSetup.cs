@@ -4,10 +4,11 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Graph;
 using Microsoft.TeamsFx;
 
-namespace ITS_InfoHub.GraphUtils
+namespace InfoHub.GraphUtils
 {
     public class SiteSetup
     {
+
 
         public async Task<bool> SetUpSite(GraphServiceClient graphClient, MicrosoftTeams microsoftTeams)
         {
