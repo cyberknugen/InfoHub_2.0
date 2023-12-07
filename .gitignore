@@ -382,3 +382,8 @@ FodyWeavers.xsd
 /InfoHub_2.0/env/.env.local
 /InfoHub_2.0/appPackage/build/appPackage.local.zip
 /InfoHub_2.0/InfoHub_2.0.csproj
+/InfoHub_2.0/appPackage/build/manifest.local.json
+/InfoHub_2.0/appPackage/color.png
+/InfoHub_2.0/appPackage/manifest.json
+/InfoHub_2.0/appPackage/outline.png
+/InfoHub_2.0/Properties/launchSettings.json
