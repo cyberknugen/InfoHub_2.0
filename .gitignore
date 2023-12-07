@@ -379,3 +379,6 @@ FodyWeavers.xsd
 /InfoHub_2.0/infra/azure.bicep
 /InfoHub_2.0/infra/azure.parameters.json
 /InfoHub_2.0/env/.env.dev
+/InfoHub_2.0/env/.env.local
+/InfoHub_2.0/appPackage/build/appPackage.local.zip
+/InfoHub_2.0/InfoHub_2.0.csproj
