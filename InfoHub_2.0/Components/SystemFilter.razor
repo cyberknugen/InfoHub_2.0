@@ -1,0 +1,124 @@
+﻿@using Azure.Core;
+@using Azure.Identity
+@using Microsoft.Graph;
+@using InfoHub.GraphUtils;
+@using Microsoft.Extensions.Configuration
+@using static InfoHub.GraphUtils.CommonHelper
+@inject IConfiguration Configuration
+@inject TeamsUserCredential teamsUserCredential
+
+<h3>SystemFilter</h3>
+@if (!string.IsNullOrEmpty(@ErrorMessage))
+{
+    <div class="error">@ErrorMessage</div>
+}
+@if (NeedConsent)
+{
+    <p>Acquiring permission...</p>
+}
+@if (IsLoading)
+{
+    <p> Loading... </p>
+}
+
+@foreach (SystemItem s in systems)
+{
+    <FluentButton>@s.title</FluentButton>
+}
+
+@code {
+    [Parameter]
+    public string ErrorMessage { get; set; }
+
+    private readonly string _scope = "Sites.ReadWrite.All";
+    private readonly string siteName = "InfoHub";
+    public bool IsLoading { get; set; }
+    public bool NeedConsent { get; set; }
+    private List<SystemItem> systems;
+
+    protected override async Task OnParametersSetAsync()
+    {
+
+        systems = new List<SystemItem>();
+
+        IsLoading = true;
+        if (await HasPermission(_scope, teamsUserCredential, Configuration))
+        {
+            await ShowContent();
+        }
+        else
+        {
+            await ConsentAndShow();
+        }
+    }
+
+    private async Task ShowContent()
+    {
+        try
+        {
+
+            await FetchSystems(SharePointID.SiteId_InfoHub, SharePointID.ListId_System);
+
+            ErrorMessage = string.Empty;
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError e)
+        {
+            ErrorMessage = e.Message;
+        }
+
+        IsLoading = false;
+    }
+
+    private async Task FetchSystems(string siteId, string listId)
+    {
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+        var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+        var filteredItems = await graphClient.Sites[siteId].Lists[listId].Items.GetAsync((requestConfiguration) =>
+        {
+            requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+        });
+
+        if (filteredItems.Value.Count > 0)
+        {
+            for (int i = 0; i < filteredItems.Value.Count; i++)
+            {
+                var item = filteredItems.Value.ElementAt(i);
+                item.Fields.AdditionalData.TryGetValue("Title", out object title);
+                item.Fields.AdditionalData.TryGetValue("owner", out object owner);
+                item.Fields.AdditionalData.TryGetValue("faculty", out object faculty);
+                item.Fields.AdditionalData.TryGetValue("IT_x002d_manager", out object ITmanager);
+                SystemItem system = new SystemItem();
+                system.title = (string)title;
+                system.owner = (string)owner;
+                system.faculty = (string)faculty;
+                system.ITmanager = (string)ITmanager;
+                systems.Add(system);
+            }
+        }
+    }
+
+    
+
+    private async Task ConsentAndShow()
+    {
+        try
+        {
+            await teamsUserCredential.LoginAsync(_scope);
+            NeedConsent = false;
+            await ShowContent();
+        }
+        catch (ExceptionWithCode e)
+        {
+            ErrorMessage = e.Message;
+        }
+    }
+
+    public struct SystemItem
+    {
+        public string title { get; set; }
+        public string owner { get; set; }
+        public string faculty { get; set; }
+        public string ITmanager { get; set; }
+    }
+
+}

@@ -1,0 +1,168 @@
+﻿@using Microsoft.Graph
+@using Azure.Core
+@using Microsoft.AspNetCore.Html
+@using static InfoHub.GraphUtils.CommonHelper;
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+@inject TeamsUserCredential teamsUserCredential
+
+<h2>@SystemName --- @Title</h2>
+<h3>Custom Content : </h3>
+@if (!string.IsNullOrEmpty(@ErrorMessage))
+{
+    <div class="error">@ErrorMessage</div>
+}
+@if (NeedConsent)
+{
+    <p>Acquiring permission...</p>
+}
+@if (IsLoading)
+{
+    <p> Loading... </p>
+} else
+{
+    <div>
+        @htmlContent
+    </div>
+}
+
+
+@code {
+    [Parameter]
+    public string ErrorMessage { get; set; }
+
+    [Parameter, EditorRequired]
+    public string SystemName { get; set; }
+    [Parameter, EditorRequired]
+    public string Title { get; set; }
+
+    public bool IsLoading { get; set; }
+    public bool NeedConsent { get; set; }
+
+    private readonly string _scope = "Sites.ReadWrite.All";
+
+    public MarkupString htmlContent;
+    public string displayName;
+
+    public GraphServiceClient client;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (SystemName == null) {
+            ErrorMessage = "Can't create component CustomContent without a SystemName!";
+            System.Diagnostics.Debug.WriteLine(ErrorMessage);
+            return;
+        }
+        if (Title == null)
+        {
+            ErrorMessage = "Can't create component CustomContent without a Title!";
+            System.Diagnostics.Debug.WriteLine(ErrorMessage);
+            return;
+        }
+
+        ErrorMessage = "";
+        htmlContent = new MarkupString("");
+
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+        client = GetGraphServiceClient(tokenCredential, _scope);
+
+        IsLoading = true;
+        if (await HasPermission(_scope, teamsUserCredential, Configuration))
+        {
+            await ShowContent();
+        }
+        else
+        {
+            await ConsentAndShow();
+        }
+    }
+
+    private async Task FetchCustomContent(string siteId, string listId)
+    {
+        var filteredItems = await client.Sites[siteId].Lists[listId].Items.GetAsync((requestConfiguration) =>
+        {
+            requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+            requestConfiguration.QueryParameters.Filter = "fields/SystemLookupId/Title eq '" + SystemName
+            + "' and fields/Title eq '" + Title + "'";
+        });
+
+        if (filteredItems.Value.Count > 0)
+        {
+            var myItem = filteredItems.Value.First();
+            myItem.Fields.AdditionalData.TryGetValue("Content", out object htmlContent);
+            this.htmlContent = new MarkupString((string)htmlContent);
+        } else
+        {
+            ErrorMessage = "No content found!";
+        }
+    }
+
+    private async Task ShowContent()
+    {
+        IsLoading = true;
+
+        try
+        {
+            var siteId = await FindSiteIDByName("InfoHub");
+            var lists = await client.Sites[siteId].Lists.GetAsync();
+            foreach (var list in lists.Value)
+            {
+                var name = list.DisplayName;
+                if (name.Equals("Custom"))
+                {
+                    // WE FOUND OUR LIST
+                    var listId = list.Id;
+
+                    await FetchCustomContent(siteId, listId);
+                }
+            }
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError e)
+        {
+            ErrorMessage = e.Message;
+        }
+
+        IsLoading = false;
+    }
+
+    private async Task ConsentAndShow()
+    {
+        try
+        {
+            await teamsUserCredential.LoginAsync(_scope);
+            NeedConsent = false;
+            await ShowContent();
+        }
+        catch (ExceptionWithCode e)
+        {
+            ErrorMessage = e.Message;
+        }
+    }
+
+    private async Task<string> FindSiteIDByName(String name)
+    {
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+        var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+
+        try
+        {
+            var result = await graphClient.Sites.GetAsync((requestConfiguration) =>
+            {
+                requestConfiguration.QueryParameters.Search = name;
+            });
+            return result.Value.ElementAt(0).Id;
+
+        }
+        catch (Exception e)
+        {
+            ErrorMessage = e.Message;
+        }
+        return "";
+    }
+
+
+   
+
+    
+}
+

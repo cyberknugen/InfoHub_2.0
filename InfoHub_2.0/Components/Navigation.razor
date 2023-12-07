@@ -1,0 +1,98 @@
+﻿<div id="header">
+    <div id="title">
+        <h1>Infohub</h1>
+    </div>
+    <div id="knapp">
+        <button class="dropdown" @onclick="ToggleDropdown" id="drop-btn">Filter</button>
+        <div class="content" style="display: @dropdownDisplay;">
+            <ul id="row1">
+                <li>Person</li>
+                <li>
+                    <input type="checkbox" id="option1" name="options" value="Option 1" @onchange="SelectOption" />
+                    <label for="option1">Option 1</label>
+                </li>
+                <li>
+                    <input type="checkbox" id="option2" name="options" value="Option 2" @onchange="SelectOption" />
+                    <label for="option2">Option 2</label>
+                </li>
+                <li>
+                    <input type="checkbox" id="option3" name="options" value="Option 3" @onchange="SelectOption" />
+                    <label for="option3">Option 3</label>
+                </li>
+            </ul>
+            <ul id="row2">
+                <li>System</li>
+                <li>
+                    <input type="checkbox" id="option4" name="options" value="Option 4" @onchange="SelectOption" />
+                    <label for="option4">Option 4</label>
+                </li>
+                <li>
+                    <input type="checkbox" id="option5" name="options" value="Option 5" @onchange="SelectOption" />
+                    <label for="option5">Option 5</label>
+                </li>
+                <li>
+                    <input type="checkbox" id="option6" name="options" value="Option 6" @onchange="SelectOption" />
+                    <label for="option6">Option 6</label>
+                </li>
+            </ul>
+            <ul id="row3">
+                <li>System</li>
+                <li>
+                    <input type="checkbox" id="option7" name="options" value="Option 7" @onchange="SelectOption" />
+                    <label for="option7">Option 7</label>
+                </li>
+                <li>
+                    <input type="checkbox" id="option8" name="options" value="Option 8" @onchange="SelectOption" />
+                    <label for="option8">Option 8</label>
+                </li>
+                <li>
+                    <input type="checkbox" id="option9" name="options" value="Option 9" @onchange="SelectOption" />
+                    <label for="option9">Option 9</label>
+                </li>
+            </ul>
+            <ul id="row4">
+                <li>System</li>
+                <li>
+                    <input type="checkbox" id="option10" name="options" value="Option 10" @onchange="SelectOption" />
+                    <label for="option10">Option 10</label>
+                </li>
+                <li>
+                    <input type="checkbox" id="option11" name="options" value="Option 11" @onchange="SelectOption" />
+                    <label for="option11">Option 11</label>
+                </li>
+                <li>
+                    <input type="checkbox" id="option12" name="options" value="Option 12" @onchange="SelectOption" />
+                    <label for="option12">Option 12</label>
+                </li>
+            </ul>
+            <button type="submit" id="apply-btn">Apply</button>
+            <button type="submit" id="clear-btn">Clear</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isDropdownVisible = false;
+    private List<string> selectedOptions = new List<string>();
+
+    private string dropdownDisplay => isDropdownVisible ? "block" : "none";
+
+    private void ToggleDropdown()
+    {
+        isDropdownVisible = !isDropdownVisible;
+    }
+
+    private void SelectOption(ChangeEventArgs e)
+    {
+        var option = e.Value.ToString();
+        if (selectedOptions.Contains(option))
+        {
+            selectedOptions.Remove(option);
+        }
+        else
+        {
+            selectedOptions.Add(option);
+        }
+    }
+}
+

@@ -1,0 +1,275 @@
+﻿@using static InfoHub.GraphUtils.CommonHelper;
+@using InfoHub.GraphUtils;
+@using static InfoHub.GraphUtils.SharePointID;
+@using Microsoft.Graph
+@using Microsoft.Graph.Models
+@using static System.Diagnostics.Debug;
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+
+@inject TeamsUserCredential teamsUserCredential
+
+<h3>@HeaderTitle</h3>
+
+@if (IsLoading)
+{
+    <p> Loading... </p>
+} else
+{
+    @if (recentChanges != null && recentChanges.Count > 0)
+    {
+        foreach (var c in recentChanges)
+        {
+            <div>
+                <RecentlyChanged ChangeData=@c />
+            </div>
+        }
+    } else
+    {
+        <p>No changes found!</p>
+    }
+
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string SystemName { get; set; }
+    [Parameter]
+    public int TopListLength { get; set; } = 3;
+    [Parameter]
+    public string HeaderTitle { get; set; } = "Latest Changes";
+    [Parameter]
+    public bool IgnoreEdits { get; set; } = false;
+
+    public bool IsLoading { get; set; }
+    private readonly string _scope = "Sites.ReadWrite.All";
+
+    public List<ChangeModel> recentChanges;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        base.OnParametersSet();
+
+        WriteLine("OnParametersSetAsync()");
+
+        IsLoading = true;
+
+        if (SystemName == null)
+        {
+            throw new Exception("Can't instantiate LatestChanges-module without SystemName parameter.");
+        }
+
+        if(HeaderTitle == null)
+        {
+            HeaderTitle = "Latest Changes";
+        }
+        TopListLength = Math.Clamp(TopListLength, 3, 10);
+
+
+        if (!await HasPermission(_scope, teamsUserCredential, Configuration))
+        {
+            await teamsUserCredential.LoginAsync(_scope);
+        }
+
+        await ShowChanges();
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        WriteLine("OnAfterRenderAsync()");
+        return base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task ShowChanges()
+    {
+        WriteLine("ShowChanges()");
+
+        recentChanges = new List<ChangeModel>();
+
+        var client = GetGraphServiceClient(teamsUserCredential, _scope);
+        var siteId = SharePointID.SiteId_InfoHub;
+
+        var topList = new List<ChangeModel>();
+
+        WriteLine("ShowChanges() 2");
+
+        var faqItems = await FetchListContents(client, siteId, ListId_FAQ);
+        var embeddedItems = await FetchListContents(client, siteId, ListId_Embedded);
+        var customItems = await FetchListContents(client, siteId, ListId_CustomContent);
+
+        WriteLine("ShowChanges() 3");
+
+        var faqChangeItems = ConvertListItemsToChangeItems(faqItems, ListId_FAQ);
+        var embeddedChangeItems = ConvertListItemsToChangeItems(embeddedItems, ListId_Embedded);
+        var customChangeItems = ConvertListItemsToChangeItems(customItems, ListId_CustomContent);
+
+        WriteLine("ShowChanges() 4");
+
+        topList = InsertChangeItemsToTopList(faqChangeItems, topList, TopListLength);
+        WriteLine("ShowChanges() 5");
+        topList = InsertChangeItemsToTopList(embeddedChangeItems, topList, TopListLength);
+        WriteLine("ShowChanges() 6");
+        topList = InsertChangeItemsToTopList(customChangeItems, topList, TopListLength);
+        WriteLine("ShowChanges() 7");
+
+        IsLoading = false;
+        recentChanges = topList;
+        StateHasChanged();
+    }
+
+    List<ChangeModel> ConvertListItemsToChangeItems(List<ListItem> listItems, string listId)
+    {
+        var changeList = new List<ChangeModel>();
+        foreach(var item in listItems)
+        {
+            if (item.SharepointIds == null || item.SharepointIds.ListId == null)
+            {
+                item.SharepointIds = new SharepointIds();
+                item.SharepointIds.ListId = listId;
+            }
+
+            var changeItem = new ChangeModel();
+            changeItem.ResponsibleUser = item.LastModifiedBy.User;
+
+            changeItem.ChangeText = getDisplayString(item);
+
+            var createdTime = item.CreatedDateTime.GetValueOrDefault(DateTimeOffset.MinValue);
+            var modifiedTime = item.LastModifiedDateTime.GetValueOrDefault(DateTimeOffset.MinValue);
+
+            if (IgnoreEdits) modifiedTime = DateTimeOffset.MinValue;
+
+            bool mostRecentModified = modifiedTime.CompareTo(createdTime) > 0;
+
+            if (mostRecentModified)
+            {
+                changeItem.ChangeText = String.Format("(EDIT) {0}", changeItem.ChangeText);
+                changeItem.TimeOfChange = modifiedTime;
+            }
+            else
+            {
+                changeItem.ChangeText = String.Format("(ADDED) {0}", changeItem.ChangeText);
+                changeItem.TimeOfChange = createdTime;
+            }
+
+            changeList.Add(changeItem);
+        }
+
+        return changeList;
+    }
+
+    List<ChangeModel> InsertChangeItemsToTopList(List<ChangeModel> changeItems, List<ChangeModel> topList, int topListLength)
+    {
+        WriteLine("insertListItemsToTopList() 1 - topList before inserts: " + string.Join(", ", topList));
+
+        foreach (var item in changeItems)
+        {
+            WriteLine("insertListItemsToTopList() 2 - attempt to insert: " + item);
+
+            var editedTopList = tryToInsert(topList, item, topListLength);
+            topList = editedTopList;
+
+            WriteLine("insertListItemsToTopList() 3 - topList after insert: " + string.Join(", ", topList));
+        }
+
+        WriteLine("insertListItemsToTopList() 4 - final topList after inserts: " + string.Join(", ", topList));
+        return topList;
+    }
+
+    string getDisplayString(ListItem item)
+    {
+        if (item.SharepointIds.ListId == ListId_FAQ)
+        {
+            if (!item.Fields.AdditionalData.TryGetValue("Title", out var title))
+            {
+                throw new Exception("Title not found!");
+            }
+            if (!item.Fields.AdditionalData.TryGetValue("question", out var question))
+            {
+                throw new Exception("question not found!");
+            }
+
+            return String.Format("{0} - {1}", title, question);
+        }
+        else if (item.SharepointIds.ListId == ListId_Embedded
+        || item.SharepointIds.ListId == ListId_CustomContent)
+        {
+            if (!item.Fields.AdditionalData.TryGetValue("Title", out var title))
+            {
+                throw new Exception("Title not found!");
+            }
+
+            return String.Format("{0}", title);
+        }
+
+        throw new Exception("ListID of ListItem not matching any known ListID.");
+    }
+
+    List<ChangeModel> tryToInsert(List<ChangeModel> list, ChangeModel itemToInsert, int maxLength)
+    {
+        WriteLine("tryToInsert() 1");
+
+        if(list.Count < 1)
+        {
+            list.Add(itemToInsert);
+            WriteLine("tryToInsert() 2.1");
+            return list;
+        }
+
+        int insertionIndex = list.Count >= maxLength ? -1 : list.Count;
+
+        foreach (var itemA in list)
+        {
+            if(itemToInsert.TimeOfChange.CompareTo(itemA.TimeOfChange) > 0)
+            {
+                // insertion time!
+                insertionIndex = list.IndexOf(itemA);
+                break;
+            }
+        }
+
+        if(insertionIndex >= 0)
+        {
+            list.Insert(insertionIndex, itemToInsert);
+
+            int listLength = list.Count > maxLength ? maxLength : list.Count;
+         
+            WriteLine("tryToInsert() 2.2");
+
+            return list.GetRange(0, listLength);
+        }
+        else
+        {
+            WriteLine("tryToInsert() 2.3");
+            return list;
+        }
+    }
+    
+    async Task<List<ListItem>> FetchListContents(GraphServiceClient client, string siteId, string listId)
+    {
+        WriteLine("FetchListContents() 1");
+        ListItemCollectionResponse result;
+        try
+        {
+            result = await client.Sites[siteId].Lists[listId].Items.GetAsync((requestConfiguration) =>
+            {
+                requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+                requestConfiguration.QueryParameters.Filter = "fields/SystemLookupId/Title eq '" + SystemName + "'";
+            });
+        }
+        catch (Exception e)
+        {
+            // Ay caramba
+            return null;
+        }
+
+        if (result.Value.Count < 1)
+        {
+            // No items!
+            return null;
+        }
+
+        WriteLine("FetchListContents() 2");
+
+        return result.Value;
+    }
+}

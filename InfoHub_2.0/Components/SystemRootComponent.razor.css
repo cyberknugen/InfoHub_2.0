@@ -1,0 +1,33 @@
+﻿#moduleList {
+    display: flex !important;
+    justify-content: center !important;
+    background-color: #7B83EB !important;
+    height: 10vh;
+    width: 100%;
+}
+
+ul {
+    list-style-type: none;
+    width: 100%;
+    margin: 0;
+    display: flex;
+    justify-content: left;
+    overflow: auto;
+    white-space: nowrap;
+}
+
+li {
+    width: auto;
+    float: right;
+    margin-left: 10px;
+}
+
+#activeModule {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+#content {
+    width: 90%;
+}

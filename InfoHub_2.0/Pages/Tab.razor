@@ -1,10 +1,30 @@
 ﻿@page "/"
 @page "/tab"
-@using InfoHub_2._0.Components;
+@using InfoHub_2._0.Components
 
 <div>
-    <Welcome />
+    <Navigation @ref="systemNavigation" />
+    <div style="background-color: #464EB8; margin: 0; witdth: 100; height: auto;">
+        <button style="background-color: #7B83EB !important; color: white; border: 1px solid #005a9e; width: 100px; height: 35px; border-radius: 4px; margin: 0 0 0 10px; font-size: 13px; margin-bottom: 2px;" @onclick="() => SwitchSystem()"> Switch System </button>
+    </div>
+    <StartPage @ref="startPage" CurrentSystem="@currentSystem" />
 </div>
 
+@code {
+    private string currentSystem = null;
 
+    Navigation systemNavigation;
+    StartPage startPage;
+
+    private void SwitchSystem()
+    {
+        if (currentSystem == "Canvas")
+        {
+            currentSystem = "Kronox";
+        } else
+        {
+            currentSystem = "Canvas";
+        }
+    }
+}
 

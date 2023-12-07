@@ -1,0 +1,91 @@
+﻿@using Azure.Core
+@using static InfoHub.GraphUtils.CommonHelper;
+@using InfoHub.GraphUtils
+@using Microsoft.Graph
+@using Microsoft.Graph.Models;
+@using static System.Diagnostics.Debug
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+@inject TeamsUserCredential teamsUserCredential
+
+
+<h3>ConsentComponent</h3>
+
+<div>
+    <h2>Get the user's Consent</h2>
+    @if (NeedConsent)
+    {
+        <p>Click below to authorize this app.</p>
+        <FluentButton Appearance="Appearance.Accent" Disabled="@IsLoading" @onclick="Consent">Authorize</FluentButton>
+    }
+    @if (IsLoading)
+    {
+        <p>Loading ConsentStuff...</p>
+    }
+    else if (!string.IsNullOrEmpty(@ErrorMessage))
+    {
+        <div class="error">@ErrorMessage</div>
+    }
+    else
+    {
+        <p> We have consent! </p>
+    }
+</div>
+@code {
+    [Parameter]
+    public string ErrorMessage { get; set; }
+
+    public bool IsLoading { get; set; }
+    public bool NeedConsent { get; set; }
+
+    private string _scope = "Sites.ReadWrite.All User.Read";
+
+    protected override async Task OnInitializedAsync()
+    {
+        WriteLine("OnInitAsync()");
+
+        IsLoading = true;
+        if (await HasPermission(_scope, teamsUserCredential, Configuration))
+        {
+            WriteLine("HasPermission = true");
+
+            // Notify event-thingy!
+
+            await ConsentCompleted();
+        }
+    }
+
+    private async Task Consent()
+    {
+        WriteLine("Consent()");
+
+        try
+        {
+            await teamsUserCredential.LoginAsync(_scope);
+
+            WriteLine("Login ok");
+
+            NeedConsent = false;
+            await ConsentCompleted();
+        }
+        catch (ExceptionWithCode e)
+        {
+            WriteLine("Consent EXCEPTION!");
+
+            ErrorMessage = e.Message;
+        }
+    }
+
+    private async Task ConsentCompleted()
+    {
+        WriteLine("ConsentCompleted");
+        
+
+
+        
+        // Notify event-thingy!
+        IsLoading = false;
+
+    }
+
+}

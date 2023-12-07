@@ -1,0 +1,187 @@
+﻿@using Azure.Core;
+@using static InfoHub.GraphUtils.CommonHelper;
+@using Azure.Identity
+@using Microsoft.Graph;
+@using Microsoft.Graph.Models;
+@using InfoHub.GraphUtils;
+@using System.Text.Json;
+@using System.IO
+@using Microsoft.Extensions.Configuration
+@inject TeamsUserCredential teamsUserCredential
+@inject IConfiguration Configuration
+
+<h3>ContactPersonsModule</h3>
+@if (!string.IsNullOrEmpty(@ErrorMessage))
+{
+    <div class="error">@ErrorMessage</div>
+}
+@if (NeedConsent)
+{
+    <p>Acquiring permission...</p>
+}
+@if (IsLoading)
+{
+    <p> Loading... </p>
+}
+@foreach(ContactPersonModel cpm in persons)
+{
+    <ContactPerson cp="@cpm"></ContactPerson>
+}
+
+@code {
+    /*this is module for gathering the contact persons for a system*/
+
+    [Parameter]
+    public string ErrorMessage { get; set; }
+    [Parameter, EditorRequired]
+    public string SystemName { get; set; }
+
+    private readonly string _scope = "Sites.ReadWrite.All User.ReadBasic.All";
+    private readonly string siteName = "InfoHub";
+    public bool IsLoading { get; set; }
+    public bool NeedConsent { get; set; }
+    List<ContactPersonModel> persons;
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        persons = new List<ContactPersonModel>();
+
+        IsLoading = true;
+        if (await HasPermission(_scope, teamsUserCredential, Configuration))
+        {
+            await ShowContent();
+        }
+        else
+        {
+            await ConsentAndShow();
+        }
+    }
+
+    private async Task ShowContent()
+    {
+
+        try
+        {
+            await FetchCustomContent(SharePointID.SiteId_InfoHub, SharePointID.ListId_ContactPersons);
+
+            ErrorMessage = string.Empty;
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError e)
+        {
+            ErrorMessage = e.Message;
+        }
+
+        IsLoading = false;
+    }
+
+    private async Task FetchCustomContent(string siteId, string listId)
+    {
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+        var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+        var filteredItems = await graphClient.Sites[siteId].Lists[listId].Items.GetAsync((requestConfiguration) =>
+        {
+            requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+            requestConfiguration.QueryParameters.Filter = "fields/SystemLookupId/Title eq '" + SystemName + "'";
+            requestConfiguration.Headers.Add("Prefer", "allowthrottleablequeries");
+        });
+
+        if (filteredItems.Value.Count > 0)
+        {
+            for (int i = 0; i < filteredItems.Value.Count; i++)
+            {
+                ContactPersonModel cp = new ContactPersonModel();
+
+                var item = filteredItems.Value.ElementAt(i);
+
+                item.Fields.AdditionalData.TryGetValue("TeamsUsers", out object user); 
+
+                User u = new User();
+
+
+
+                if (user == null)
+                {
+                    item.Fields.AdditionalData.TryGetValue("Title", out object name);
+                    item.Fields.AdditionalData.TryGetValue("Info", out object info);
+                    item.Fields.AdditionalData.TryGetValue("WorkTitle", out object worktitle);
+                    item.Fields.AdditionalData.TryGetValue("PhoneNbr", out object phone);
+                    item.Fields.AdditionalData.TryGetValue("ChatUrl", out object chaturl);
+
+                    cp.Name = (string)name;
+                    cp.Info = (string)info;
+                    cp.WorkTitle = (string)worktitle;
+                    cp.PhoneNbr = (string)phone;
+
+                    JsonElement urlObject = (JsonElement)chaturl;
+                    urlObject.TryGetProperty("Url", out var url);
+                    cp.ChatUrl = url.GetString();
+
+                }
+                else
+                {
+                    JsonElement je = (JsonElement)user;
+
+                    var enumerator = je.EnumerateArray();
+                    var obj = enumerator.ElementAt(0);
+                    if (obj.TryGetProperty("Email", out var email))
+                    {
+                        string mailstring = email.GetString();
+
+                        var result = await graphClient.Users[mailstring].GetAsync();
+                        cp.addUserObject(result);
+
+
+                    }
+
+
+
+
+                }
+                persons.Add(cp);
+
+            }
+        }
+        IsLoading = false;
+    }
+
+
+   
+
+    private async Task ConsentAndShow()
+    {
+        try
+        {
+            await teamsUserCredential.LoginAsync(_scope);
+            NeedConsent = false;
+            await ShowContent();
+        }
+        catch (ExceptionWithCode e)
+        {
+            ErrorMessage = e.Message;
+        }
+    }
+
+   
+
+    public struct ContactPersonModel
+    {
+        public string WorkTitle { get; set; }
+        public string Info { get; set; }
+        public string Name { get; set; }
+        public string PhoneNbr { get; set; }
+        public string Email { get; set; }
+        public string ChatUrl { get; set; }
+
+        public void addUserObject(User user)
+        {
+            WorkTitle = user.JobTitle;
+            Info = user.AboutMe;
+            Name = user.DisplayName;
+            PhoneNbr = user.MobilePhone;
+            Email = user.Mail;
+            ChatUrl = "https://teams.microsoft.com/l/chat/0/0?" + user.UserPrincipalName; //kan behöva ses över
+        }
+
+    }
+}

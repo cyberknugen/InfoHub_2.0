@@ -1,0 +1,100 @@
+﻿#header {
+    background-color: #464EB8;
+    margin: 0;
+    color: white;
+    height: 10vh;
+    padding-left: 10px;
+    display: grid;
+    grid-template-columns: 2fr 1fr 2fr;
+    grid-template-areas: 'title . knapp '; /* Updated the grid areas */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif
+}
+
+ul {
+    background-color: white;
+    color: black;
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    float: right;
+    width: 25%;
+}
+
+ul > li {
+        padding: 10px;
+        margin: 2px;
+}
+
+#apply-btn {
+    float: right;
+    margin-right: 4px;
+    margin-bottom: 4px;
+    background-color: #7B83EB;
+    color: White;
+    border-radius: 8px;
+    border: none;
+    padding: 5px 10px 5px 10px;
+    text-decoration: none;
+    font-size: 16px;
+    width: 80px;
+
+}
+
+#clear-btn {
+    float: right;
+    margin-right: 4px;
+    margin-bottom: 4px;
+    background-color: #7B83EB;
+    color: White;
+    border-radius: 8px;
+    border: none;
+    padding: 5px 10px 5px 10px;
+    text-decoration: none;
+    font-size: 16px;
+    width: 80px;
+}
+
+#title {
+    grid-area: title;
+}
+
+#knapp {
+    grid-area: knapp;
+    display: flex;
+    flex-direction: column; /* Set the flex direction to column */
+    align-items: center; /* Center horizontally */
+}
+
+#drop-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 60px;
+    width: 100px !important;
+    height: 30px !important;
+    background-color: #7B83EB;
+    color: White;
+    border-radius: 8px;
+    border: none;
+    padding: 15px 32px;
+    text-decoration: none;
+    font-size: 16px;
+}
+
+button:hover {
+    cursor: pointer;
+
+}
+
+.content {
+    position: relative; /* Use relative positioning */
+    background-color: white;
+    display: none;
+    width: 100%;
+    z-index: 2; /* Set a higher z-index value */
+    left: -65%;
+    border-radius: 5px;
+    margin-left: 200px;
+}
+
+

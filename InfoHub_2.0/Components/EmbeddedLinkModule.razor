@@ -1,0 +1,127 @@
+﻿s@using System.IO
+@using Azure.Core
+@using static InfoHub.GraphUtils.CommonHelper;
+@using Azure.Identity;
+@using Microsoft.Graph
+@using Microsoft.Graph.Models;
+@using Microsoft.Extensions.Configuration
+@inject TeamsUserCredential teamsUserCredential
+@inject IConfiguration Configuration
+
+
+
+<h2>@SystemName --- @Title</h2>
+@if (IsLoading)
+{
+    <p> Loading... </p>
+}
+else
+{
+    <div>
+        <p>
+            <b>URL:</b> <br />
+            @theLink
+        </p>
+        <div text-align="center" height="600">
+            <iframe display="block" border-style="none" height="600" id="embeddFrame" src="@theLink" width="90%" />
+        </div>
+    </div>
+}
+
+
+@code {
+
+    [Parameter]
+    public string ErrorMessage { get; set; }
+    public bool IsLoading { get; set; }
+    public bool NeedConsent { get; set; }
+
+    string theLink { get; set; }
+
+    [Parameter, EditorRequired]
+    public string SystemName { get; set; }
+    [Parameter, EditorRequired]
+    public string Title { get; set; }
+
+    private readonly string _scope = "Sites.ReadWrite.All";
+    public const string ListId_Embedded = "d1737c38-c9e1-42fd-b191-eb6cab5b25c4";
+
+    public const string SiteId_InfoHub =
+    "livelabsmah.sharepoint.com,06e83ef0-42c7-41c5-a2ee-98e8fbf048ae,f00c9244-4a5e-4a46-b882-452b4f61bbbc";
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        IsLoading = true;
+        if (await HasPermission(_scope, teamsUserCredential, Configuration))
+        {
+            await fetchLink();
+        }
+        else
+        {
+            await ConsentAndShow();
+        }
+    }
+
+
+    private async Task ConsentAndShow()
+    {
+        try
+        {
+            await teamsUserCredential.LoginAsync(_scope);
+            NeedConsent = false;
+            await fetchLink();
+        }
+        catch (ExceptionWithCode e)
+        {
+            ErrorMessage = e.Message;
+        }
+    }
+
+
+    private async Task fetchLink()
+    {
+        IsLoading = true;
+
+        await showLink();
+        IsLoading = false;
+        ErrorMessage = string.Empty;
+    }
+
+
+    private async Task showLink()
+    {
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+        var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+
+        try
+        {
+            var r = await graphClient.Sites[SiteId_InfoHub].Lists.GetAsync();
+
+            var result = await graphClient.Sites[SiteId_InfoHub].Lists[ListId_Embedded].Items.GetAsync((requestConfiguration) =>
+            {   
+                requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+                requestConfiguration.QueryParameters.Filter = "fields/SystemLookupId/Title eq '" + SystemName
+                + "' and fields/Title eq '" + Title +  "'";
+            });
+
+            if (result != null)
+            {
+                result.Value[0].Fields.AdditionalData.TryGetValue("Link", out object contentObject);
+
+                var content = (System.Text.Json.JsonElement)contentObject;
+                theLink = content.GetProperty("Url").ToString();
+            }
+        }
+        catch (Exception e)
+        {
+            ErrorMessage = e.Message;
+        }
+
+    }
+
+
+
+   
+
+}

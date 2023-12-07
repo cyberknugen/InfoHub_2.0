@@ -1,0 +1,42 @@
+﻿body {
+    margin: 0;
+    padding: 0;
+    position: relative;
+}
+
+    body::before {
+        content: "";
+        position: fixed; /* Use fixed position to cover the entire page */
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: url(/wwwroot/background.jpg);
+        opacity: 0.3;
+        z-index: -1;
+        pointer-events: none;
+        background-size: cover; /* Stretch the background image to cover the entire page */
+    }
+
+.container {
+    background-color: rgba(255, 255, 255, 0.7);
+    margin: 10% auto 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 50%;
+    height: 50vh;
+    border-radius: 5px;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+
+#description {
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+}

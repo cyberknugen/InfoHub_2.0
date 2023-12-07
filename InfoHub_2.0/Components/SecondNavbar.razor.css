@@ -1,0 +1,26 @@
+﻿#secondnavbar {
+    background-color: #7B83EB;
+    height: 30px;
+}
+ul {
+    list-style-type: none;
+    width: 100%;
+    background-color:black;
+}
+
+li {
+    float: left;
+    width: 3%;
+    padding-top: 4px;
+    color: black;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0;
+    padding-bottom: 5px;
+    margin-right: 5%;
+}
+    li:hover {
+        background-color: #464EB8;
+        color: white;
+    }

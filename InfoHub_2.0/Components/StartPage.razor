@@ -1,0 +1,27 @@
+﻿
+@if(CurrentSystem == null)
+{
+    <div class="container">
+        <div id="title">
+            <h1>Välkommen till Infohub</h1>
+            <p>Applikation skapad som examensprojekt</p>
+        </div>
+        <div id="description">
+            <h2>Instruktioner</h2>
+            <p>För att söka efter system klicka på <b>filter-knappen</b>, Där har du alternativ efter vad du söker efter</p>
+        </div>
+    </div>
+} else
+{
+    <SystemRootComponent SystemName=@CurrentSystem />
+}
+
+@code {
+    [Parameter]
+    public string CurrentSystem { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        StateHasChanged();
+    }
+}

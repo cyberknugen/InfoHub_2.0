@@ -11,8 +11,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="infra\**" />
+    <Compile Remove="Interop\**" />
     <None Remove="build/**/*" />
+    <None Remove="infra\**" />
+    <None Remove="Interop\**" />
     <Content Remove="build/**/*" />
+    <Content Remove="infra\**" />
+    <Content Remove="Interop\**" />
+    <EmbeddedResource Remove="infra\**" />
+    <EmbeddedResource Remove="Interop\**" />
   </ItemGroup>
 
   <ItemGroup>

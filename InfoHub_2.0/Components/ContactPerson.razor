@@ -1,0 +1,54 @@
+﻿@using static InfoHub_2._0.Components.ContactPersonsModule
+<h3>ContactPerson</h3>
+<div>
+	@foreach(string s in infoList)
+	{
+		<p>@s</p>
+	}
+</div>
+
+@code {
+	/*this is a component for displaying a single contact person
+	 * OnParametersSetAsync is one demonstration for how do display content, but can
+	 * (and probably should) be modified)
+	 */
+
+	[Parameter]
+	public ContactPersonModel cp { get; set; }
+	public List<string> infoList;
+
+
+	protected override async Task OnParametersSetAsync()
+	{
+		infoList = new List<string>();
+
+		if(cp.Name != null)
+		{
+			infoList.Add(cp.Name);
+		}
+		if (cp.WorkTitle != null)
+		{
+			infoList.Add(cp.WorkTitle);
+		}
+		if (cp.PhoneNbr != null)
+		{
+			infoList.Add(cp.PhoneNbr);
+		}
+		if (cp.Email != null)
+		{
+			infoList.Add(cp.Email);
+		}
+		if (cp.ChatUrl != null)
+		{
+			infoList.Add(cp.ChatUrl);
+		}
+		if (cp.Info != null)
+		{
+			infoList.Add(cp.Info);
+		}
+	}
+
+	
+
+
+}

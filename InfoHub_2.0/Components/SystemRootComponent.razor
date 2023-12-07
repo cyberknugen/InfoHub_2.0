@@ -1,0 +1,269 @@
+﻿@using Azure.Core;
+@using Microsoft.Graph
+@using static InfoHub.GraphUtils.CommonHelper
+@using InfoHub.GraphUtils
+@using Microsoft.AspNetCore.Components.Rendering;
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+@inject TeamsUserCredential teamsUserCredential
+<link rel="stylesheet" href="/css/SystemRootComponent.razor.css" />
+<link rel="stylesheet" href="~/css/SystemRootComponent.razor.css" />
+
+
+
+@if (IsLoading)
+{
+	<p> Loading... </p>
+}
+else
+{
+	<div id="moduleList">
+		
+
+		<ul id="componentMenu">
+			<li>
+                <p><FluentButton @onclick="() => ShowModule(null)"> HOME </FluentButton></p>
+			</li>
+
+			@foreach (var module in Modules)
+			{
+				<li>
+					<p>
+						<FluentButton @onclick="() => ShowModule(module.RenderFragment)"> @module.Title </FluentButton>
+					</p>
+				</li>
+			}
+			<li>
+				<p>
+					<FluentButton @onclick="() => OnParametersSetAsync()"> RELOAD </FluentButton>
+				</p>
+			</li>
+		</ul>	
+	</div>
+
+	<h3>SystemRootComponent - @SystemName</h3>
+	<div id="activeModule"> 
+		@if(ModuleContent != null)
+		{
+			<div id="content">
+				@ModuleContent
+			</div>
+		} else
+		{
+			<h1 align="center"> This is a LandingPage </h1>
+			<div>
+				<LatestChanges SystemName=@SystemName TopListLength=5 HeaderTitle="This is new!" />
+			</div>
+			<div>
+				<LatestChanges SystemName=@SystemName TopListLength=10 HeaderTitle="Recent Additions" IgnoreEdits=true/>
+			</div>
+			<!-- <LandingPage SystemName=@SystemName /> -->
+		}
+	</div>
+}
+
+
+@code {
+	[Parameter, EditorRequired]
+	public string SystemName { get; set; }
+	public bool IsLoading { get; set; }
+
+	private List<Module> Modules = new List<Module>();
+
+	private RenderFragment ModuleContent;
+
+	private readonly string _scope = "Sites.ReadWrite.All";
+
+	RenderTreeBuilder builder;
+	GraphServiceClient client;
+
+	protected override async Task OnInitializedAsync()
+	{
+		if (!await HasPermission(_scope, teamsUserCredential, Configuration))
+		{
+			await teamsUserCredential.LoginAsync(_scope);
+		}
+	}
+
+	protected override async Task OnParametersSetAsync()
+	{
+		IsLoading = true;
+			
+		if (SystemName == null)
+		{
+			return;
+		}
+		var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+		client = GetGraphServiceClient(tokenCredential, _scope);
+		builder = new RenderTreeBuilder();
+		ModuleContent = null;
+
+		if (await HasPermission(_scope, teamsUserCredential, Configuration))
+		{
+			await CreateModuleButtons();
+		}
+		else
+		{
+			await ConsentAndShow();
+		}
+	}
+
+	private async Task ConsentAndShow()
+	{
+		try
+		{
+			await teamsUserCredential.LoginAsync(_scope);
+			//NeedConsent = false;
+			await CreateModuleButtons();
+		}
+		catch (ExceptionWithCode e)
+		{
+			// ErrorMessage = e.Message;
+		}
+	}
+
+	
+
+	private async Task CreateModuleButtons()
+	{
+		Modules.Clear();
+		await CreateFAQModules();
+		await CreateCustomModules();
+		await CreateEmbeddedModules();
+		IsLoading = false;
+	}
+
+	private async Task CreateFAQModules()
+	{
+		var siteId = SharePointID.SiteId_InfoHub;
+		var listId = SharePointID.ListId_FAQ;
+
+		var result = await client.Sites[siteId].Lists[listId].Items.GetAsync((requestConfiguration) =>
+		{
+			requestConfiguration.QueryParameters.Filter = "fields/SystemLookupId/Title eq '" + SystemName + "'";
+			requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+		});
+
+		List<string> uniqueTitles = new List<string>();
+		foreach (var row in result.Value)
+		{
+			if (row.Fields.AdditionalData.TryGetValue("Title", out var titleObject))
+			{
+				if(uniqueTitles.Contains((string) titleObject))
+				{
+					// Only create a module for each unique System+Title combination
+					continue;
+				}
+				else
+				{
+					uniqueTitles.Add((string)titleObject);
+
+					RenderFragment component = builder =>
+					{
+						builder.OpenComponent<FAQ>(0);
+						builder.AddAttribute(1, "SystemName", SystemName);
+						builder.AddAttribute(2, "Title", (string)titleObject);
+						builder.CloseComponent();
+					};
+
+					Modules.Add(new Module((string)titleObject, component));
+				}
+			}
+		}
+	}
+
+	private async Task CreateEmbeddedModules()
+	{
+		var siteId = SharePointID.SiteId_InfoHub;
+		var listId = SharePointID.ListId_Embedded;
+
+		var result = await client.Sites[siteId].Lists[listId].Items.GetAsync((requestConfiguration) =>
+		{
+			requestConfiguration.QueryParameters.Filter = "fields/SystemLookupId/Title eq '" + SystemName + "'";
+			requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+		});
+
+		foreach (var row in result.Value)
+		{
+			if (row.Fields.AdditionalData.TryGetValue("Title", out var titleObject))
+			{
+				RenderFragment component = builder =>
+				{
+					builder.OpenComponent<EmbeddedLinkModule>(0);
+					builder.AddAttribute(1, "SystemName", SystemName);
+					builder.AddAttribute(2, "Title", (string)titleObject);
+					builder.CloseComponent();
+				};
+
+				Module module = new Module((string)titleObject, component);
+				Modules.Add(module);
+			}
+			else
+			{
+				System.Diagnostics.Debug.WriteLine("Could not find Title!");
+			}
+		}
+	}
+
+	private async Task CreateCustomModules()
+	{
+		var siteId = SharePointID.SiteId_InfoHub;
+		var listId = SharePointID.ListId_CustomContent;
+
+		var result = await client.Sites[siteId].Lists[listId].Items.GetAsync((requestConfiguration) =>
+		{
+			requestConfiguration.QueryParameters.Filter = "fields/SystemLookupId/Title eq '" + SystemName + "'";
+			requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+		});
+
+		foreach (var row in result.Value)
+		{
+			if (row.Fields.AdditionalData.TryGetValue("Title", out var titleObject))
+			{
+				RenderFragment component = builder =>
+				{
+					builder.OpenComponent<CustomContent>(0);
+					builder.AddAttribute(1, "SystemName", SystemName);
+					builder.AddAttribute(2, "Title", (string)titleObject);
+					builder.CloseComponent();
+				};
+
+				Module module = new Module((string)titleObject, component);
+				Modules.Add(module);
+			}
+			else
+			{
+				System.Diagnostics.Debug.WriteLine("Could not find Title!");
+			}
+		}
+	}
+
+	/// <summary>
+	///  Replace DynamicContent with the appropriate module.
+	/// </summary>
+	private void ShowModule(RenderFragment renderFragment)
+	{
+		ModuleContent = renderFragment;
+	}
+
+
+	enum ModuleType
+	{
+		FAQ,
+		CustomContent,
+		Embedded,
+		LandingPage
+	}
+
+	struct Module
+	{
+		public Module(String _title, RenderFragment _renderFragment)
+		{
+			this.Title = _title;
+			this.RenderFragment = _renderFragment;
+		}
+
+		public readonly String Title;
+		public readonly RenderFragment RenderFragment;
+	}
+}

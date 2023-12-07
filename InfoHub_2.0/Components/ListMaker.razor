@@ -1,0 +1,358 @@
+﻿@using System.IO
+@using Azure.Core
+@using ITS_InfoHub.GraphUtils;
+@using static InfoHub.GraphUtils.CommonHelper;
+@using Microsoft.Graph
+@using Microsoft.Graph.Models;
+@using System.Reflection.Metadata;
+@using System.Text.RegularExpressions;
+
+@inject TeamsFx teamsfx
+@inject TeamsUserCredential teamsUserCredential
+@inject NavigationManager NavigationManager
+@inject IConfiguration Configuration
+@inject IJSRuntime jsRuntime
+
+<h1>ListMaker</h1>
+
+<style>
+    .custom-button {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        background-color: #3498db;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        transition: background-color 0.3s ease;
+    }
+
+        .custom-button:hover {
+            background-color: #2980b9;
+        }
+</style>
+
+<h3>Click the button to create lists!</h3>
+
+<button class="custom-button" @onclick="CreateLists">Create lists</button>
+
+
+
+@code {
+
+    public bool IsLoading { get; set; }
+    public bool NeedConsent { get; set; }
+
+    private readonly string _scope = "Sites.Manage.All";
+    public const string SiteId_InfoHub =
+    "livelabsmah.sharepoint.com,06e83ef0-42c7-41c5-a2ee-98e8fbf048ae,f00c9244-4a5e-4a46-b882-452b4f61bbbc";
+
+    public LinkedList<string> ColumnTypes = new LinkedList<string>(new[]
+    {
+        "Text",
+        "Choice",
+        "Date and time",
+        "Multiple lines of text",
+        "Person",
+        "Number",
+        "Yes/No",
+        "Hyperlink",
+        "Currency",
+        "Location",
+        "Image",
+        //"Managed metadata",
+        "Lookup"
+    });
+
+
+
+
+    //create lists in InfoHub site
+    private async Task<bool> CreateListsInInfoHub()
+    {
+        try
+        {
+            Dictionary<string, string> testD = new Dictionary<string, string>();
+            testD.Add("name", "Text");
+            testD.Add("choice", "Choice");
+            testD.Add("date and time", "Date and time");
+
+            testD.Add("tel", "Number");
+            testD.Add("curr", "Currency");
+            testD.Add("lookup", "Lookup");
+
+            testD.Add("hyperLink", "Hyperlink");
+            testD.Add("geoLocation", "Location");
+            testD.Add("image", "Image");
+
+            testD.Add("person", "Person");
+            testD.Add("yes or no", "Yes/No");
+            testD.Add("multiple lines", "Multiple lines of text");
+
+            //testD.Add("managed metadata", "Managed metadata");
+
+            string listID = await GetListIDbyName(SiteId_InfoHub, "Test1");
+
+            var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+            var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+            string siteID = await new SiteSetup().FindSiteIDByName("TestSubSite", graphClient);
+            await CreateList(siteID, "Test2", testD, "genericList", null);
+
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+
+    //creates lists in a subsite
+    private async Task<bool> CreateListsInSubsite()
+    {
+        try
+        {
+
+            Dictionary<string, string> systemD = new Dictionary<string, string>();
+            systemD.Add("owner", "Text");
+            systemD.Add("faculty", "Text");
+            systemD.Add("IT-manager", "Text");
+
+            var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+            var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+            string siteID = await new SiteSetup().FindSiteIDByName("TestSubSite", graphClient);
+            await CreateList(siteID, "System_2", systemD, "genericList", null);
+
+
+            Dictionary<string, string> kontaktPersonerD = new Dictionary<string, string>();
+            kontaktPersonerD.Add("name", "Text");
+            kontaktPersonerD.Add("TeamsUsers", "Person");
+            kontaktPersonerD.Add("Info", "Multiple lines of text");
+            kontaktPersonerD.Add("System", "Lookup");
+            kontaktPersonerD.Add("WorkTitle", "Text");
+            kontaktPersonerD.Add("PhoneNbr", "Text");
+            kontaktPersonerD.Add("ChatUrl", "Hyperlink");
+
+
+            var tokenCredential2 = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+            var graphClient2 = GetGraphServiceClient(tokenCredential, _scope);
+            string siteID2 = await new SiteSetup().FindSiteIDByName("testsubsite", graphClient2);
+            string listIDForLookup = await GetListIDbyName(siteID2, "System_2");
+
+            await CreateList(siteID2, "KontaktPersoner_2", kontaktPersonerD, "genericList", listIDForLookup);
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Error when trying to create sites!");
+            return false;
+        }
+    }
+
+
+    //used to get the list ID for lookup column
+    private async Task<string> GetListIDbyName(string siteId, string listName)
+    {
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+        var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+        var lists = await graphClient.Sites[siteId].Lists.GetAsync();
+
+        foreach (var list in lists.Value)
+        {
+            var name = list.DisplayName;
+            var listId = list.Id;
+
+            if (name == listName)
+            {
+                return listId;
+            }
+        }
+
+        return null;
+    }
+
+
+    public async Task<bool> CreateList(string siteID, string displayName, Dictionary<string, string> columns, string template, string listID)
+    {
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+        var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+
+        try
+        {
+            var columnDefinitions = new List<ColumnDefinition>();
+
+            foreach (var column in columns)
+            {
+                string columnName = column.Key;
+                string columnType = column.Value;
+
+                ColumnDefinition columnDefinition;
+
+                switch (columnType)
+                {
+                    case "Text":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Text = new TextColumn()
+                            };
+                        break;
+                    case "Choice":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Choice = new ChoiceColumn()
+                            };
+                        break;
+                    case "Date and time":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                DateTime = new DateTimeColumn()
+                            };
+                        break;
+                    case "Number":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Number = new NumberColumn()
+                            };
+                        break;
+                    case "Currency":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Currency = new CurrencyColumn()
+                            };
+                        break;
+                    case "Lookup":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Lookup = new LookupColumn
+                                {
+                                    ColumnName = "Title",
+                                    ListId = listID
+
+                                }
+                            };
+                        break;
+                    case "Hyperlink":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                HyperlinkOrPicture = new HyperlinkOrPictureColumn()
+                            };
+                        break;
+                    case "Location":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Geolocation = new GeolocationColumn()
+                            };
+                        break;
+                    case "Image":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Thumbnail = new ThumbnailColumn()
+                            };
+                        break;
+                    case "Person":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                PersonOrGroup = new PersonOrGroupColumn()
+                            };
+                        break;
+                    case "Yes/No":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Boolean = new BooleanColumn()
+                            };
+                        break;
+                    case "Multiple lines of text":
+                        columnDefinition = new ColumnDefinition
+                            {
+                                Name = columnName,
+                                Text = new TextColumn
+                                {
+                                    AllowMultipleLines = true
+                                }
+                            };
+                        break;
+
+                    default:
+                        Console.WriteLine("Unrecognized column type " + columnType + " for column " + columnName);
+                        throw new Exception("Invalid column!");
+                        break;
+                }
+                columnDefinitions.Add(columnDefinition);
+            }
+
+
+            var requestBody = new List
+                {
+                    DisplayName = displayName,
+                    Columns = columnDefinitions,
+                    ListProp = new ListInfo
+                    {
+                        Template = template,
+                    },
+                };
+
+
+            var result = await graphClient.Sites[siteID].Lists.PostAsync(requestBody);
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.Message);
+        }
+
+
+        return false;
+    }
+
+
+    private async void CreateLists()
+    {
+        IsLoading = true;
+        if (await HasPermission(_scope, teamsUserCredential, Configuration))
+        {
+            //await CreateListsInInfoHub();
+            await CreateListsInSubsite();
+        }
+        else
+        {
+            await ConsentAndShow();
+        }
+    }
+
+
+    private async Task ConsentAndShow()
+    {
+        try
+        {
+            await teamsUserCredential.LoginAsync(_scope);
+            NeedConsent = false;
+            //await CreateListsInInfoHub();
+            await CreateListsInSubsite();
+        }
+        catch (ExceptionWithCode e)
+        {
+            Console.WriteLine(e.Message);
+        }
+    }
+
+
+    
+
+
+    
+
+}

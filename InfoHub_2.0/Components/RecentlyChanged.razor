@@ -1,0 +1,24 @@
+﻿@using InfoHub.GraphUtils
+@using Microsoft.Graph.Models
+@if (ChangeData != null)
+{
+    <p title=@ChangeData.ResponsibleUser.DisplayName> [@formattedTimeStamp] - @ChangeData.ChangeText </p>
+}
+else
+{
+    <p>ChangeData not found!</p>
+}
+
+@code {
+    [Parameter]
+    public ChangeModel ChangeData { get; set; }
+
+    private string formattedTimeStamp;
+
+    protected override void OnParametersSet()
+    {
+        formattedTimeStamp = ChangeData.TimeOfChange.ToString("yyyy-MM-dd : HH:mm");
+        StateHasChanged();
+        base.OnParametersSet();
+    }
+}

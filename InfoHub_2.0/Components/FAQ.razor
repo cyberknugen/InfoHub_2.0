@@ -1,0 +1,154 @@
+﻿@using Azure.Core;
+@using Azure.Identity
+@using static InfoHub.GraphUtils.CommonHelper;
+@using InfoHub.GraphUtils
+@using Microsoft.Graph;
+@using System.IO
+@using Microsoft.Graph.Models;
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+@inject TeamsUserCredential teamsUserCredential
+<h3>FAQ: @Title</h3>
+@if (!string.IsNullOrEmpty(@ErrorMessage))
+{
+    <div class="error">@ErrorMessage</div>
+}
+@if (NeedConsent)
+{
+    <p>Acquiring permission...</p>
+}
+@if (IsLoading)
+{
+    <p> Loading... </p>
+}
+<div>
+    @foreach(QA qa in QAs)
+    {
+        <QA question="@qa.question" answer="@qa.answer"></QA>
+    }
+
+</div>
+
+
+
+@code {
+     /*
+     * Denna klassen behöver få Systemnamnet och Titeln som parameter när den skapas. Just nu hämtar den SiteID och ListID, men kommer eventuellt
+     * senare att hämta dem från ett lokalt enum istället.
+     * Skapar för varje fråga en QA-komponent.
+    */
+    [Parameter]
+    public string ErrorMessage { get; set; }
+    [Parameter, EditorRequired]
+    public string SystemName { get; set; }
+    [Parameter, EditorRequired]
+    public string Title { get; set; } //motsvarande title i sharepoint, säger vilken kategori faqn tillhör
+
+    private readonly string _scope = "Sites.ReadWrite.All";
+    private readonly string siteName = "InfoHub";
+    public bool IsLoading { get; set; }
+    public bool NeedConsent { get; set; }
+
+    public List<QA> QAs;
+
+    protected override async Task OnParametersSetAsync()
+    {
+
+        QAs = new List<QA>();
+
+        IsLoading = true;
+        if (await HasPermission(_scope, teamsUserCredential, Configuration))
+        {
+            await ShowContent();
+        }
+        else
+        {
+            await ConsentAndShow();
+        }
+    }
+
+    private async Task ShowContent()
+    {
+        IsLoading = true;
+
+        var siteId = SharePointID.SiteId_InfoHub;
+        var listId = SharePointID.ListId_FAQ;
+        await FetchCustomContent(siteId, listId);
+
+        IsLoading = false;
+    }
+
+    private async Task FetchCustomContent(string siteId, string listId)
+    {
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential,Configuration);
+        var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+
+        var filteredItems = await graphClient.Sites[siteId].Lists[listId].Items.GetAsync((requestConfiguration) =>
+        {
+            requestConfiguration.QueryParameters.Expand = new string[] { "fields" };
+            requestConfiguration.QueryParameters.Filter = "fields/SystemLookupId/Title eq '" + SystemName + "'and fields/Title eq '" + Title + "'";
+                requestConfiguration.Headers.Add("Prefer", "allowthrottleablequeries");
+        });
+
+        if (filteredItems.Value.Count > 0)
+        {
+           for(int i = 0; i < filteredItems.Value.Count; i++)
+            {
+                var item = filteredItems.Value.ElementAt(i);
+                item.Fields.AdditionalData.TryGetValue("answer", out object answer);
+                item.Fields.AdditionalData.TryGetValue("question", out object question);
+                QA qa = new QA();
+                qa.question = (string)question;
+                qa.answer = (string)answer;
+                QAs.Add(qa);
+            }
+        }
+    }
+
+    private async Task<string> FindSiteIDByName(String name)
+    {
+        var tokenCredential = await GetOnBehalfOfCredential(teamsUserCredential, Configuration);
+        var graphClient = GetGraphServiceClient(tokenCredential, _scope);
+
+        try
+        {
+            var result = await graphClient.Sites.GetAsync((requestConfiguration) =>
+            {
+                requestConfiguration.QueryParameters.Search = name;
+            });
+            return result.Value.ElementAt(0).Id;
+
+        }
+        catch (Exception e)
+        {
+            ErrorMessage = e.Message;
+        }
+        return "";
+    }
+
+   
+
+    
+
+    private async Task ConsentAndShow()
+    {
+        try
+        {
+            await teamsUserCredential.LoginAsync(_scope);
+            NeedConsent = false;
+            await ShowContent();
+        }
+        catch (ExceptionWithCode e)
+        {
+            ErrorMessage = e.Message;
+        }
+    }
+
+
+
+    public struct QA
+    {
+        public string question { get; set; }
+        public string answer { get; set;  }
+    }
+}
